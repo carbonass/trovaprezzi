@@ -1,0 +1,4 @@
+.env
+test_feed.csv
+__pycache__/
+*.pyc
