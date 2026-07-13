@@ -10,6 +10,7 @@ import os
 import re
 import html
 import csv
+import math
 import sys
 import requests
 
@@ -18,18 +19,50 @@ TOKEN = os.environ["SHOPIFY_ACCESS_TOKEN"]
 API_BASE = f"https://{STORE}/admin/api/2024-01"
 SHOP_DOMAIN = "cassefortieserrature.com"
 
-SOGLIA_SPEDIZIONE_FISSA = 100.0  # sotto questa soglia, spedizione a tariffa fissa
-SPEDIZIONE_FISSA = 9.99          # tariffa fissa sotto soglia (tutte le categorie)
-SPEDIZIONE_CASSAFORTE_OLTRE_SOGLIA = 20.0  # casseforti >= soglia: costo a peso/zona sul sito, valore di riferimento per il feed
+SOGLIA_SPEDIZIONE_FISSA = 100.0  # sotto questa soglia, spedizione a tariffa fissa (categorie non-cassaforte)
+SPEDIZIONE_FISSA = 9.99          # tariffa fissa sotto soglia (categorie non-cassaforte)
 SPEDIZIONE_ALTRO_OLTRE_SOGLIA = 0.0        # altre categorie >= soglia: spedizione gratuita
+SPEDIZIONE_CASSAFORTE_FALLBACK = 20.0      # solo se manca il peso sulla variante (non dovrebbe succedere)
+
+# Tariffe zona CENTRO (Toscana, Umbria, Marche, Lazio) dal listino trasporti Bordogna 2026,
+# usata come riferimento per le casseforti: la citta' di consegna non e' nota in anticipo,
+# ma il peso si', quindi si stima il costo come se la spedizione fosse sempre verso le Marche.
+# (listini/fasce_peso_trasporto_bordogna.csv, gruppo CENTRO)
+FASCE_SPEDIZIONE_CENTRO = [
+    (5, 10.00),
+    (20, 15.00),
+    (50, 20.00),
+    (100, 37.00),
+    (200, 74.00),
+    (300, 111.00),
+    (400, 148.00),
+    (500, 185.00),
+    (600, 222.00),
+    (700, 259.00),
+    (800, 296.00),
+    (900, 333.00),
+    (1000, 370.00),
+]
 
 
-def spese_spedizione(product, prezzo):
+def spedizione_peso_centro(peso_kg):
+    for max_kg, prezzo in FASCE_SPEDIZIONE_CENTRO:
+        if peso_kg <= max_kg:
+            return prezzo
+    # oltre 1000 kg: la tariffa CENTRO cresce di 37€ a quintale, si estrapola con lo stesso passo
+    quintali_extra = math.ceil((peso_kg - 1000) / 100)
+    return 370.00 + quintali_extra * 37.00
+
+
+def spese_spedizione(product, prezzo, peso_kg):
+    if product.get("product_type", "").strip().lower() == "cassaforte":
+        if not peso_kg or peso_kg <= 0:
+            print(f"ATTENZIONE: peso mancante per variante di '{product.get('title')}', uso fallback {SPEDIZIONE_CASSAFORTE_FALLBACK}€", file=sys.stderr)
+            return SPEDIZIONE_CASSAFORTE_FALLBACK
+        return spedizione_peso_centro(peso_kg)
     prezzo = float(prezzo or 0)
     if prezzo < SOGLIA_SPEDIZIONE_FISSA:
         return SPEDIZIONE_FISSA
-    if product.get("product_type", "").strip().lower() == "cassaforte":
-        return SPEDIZIONE_CASSAFORTE_OLTRE_SOGLIA
     return SPEDIZIONE_ALTRO_OLTRE_SOGLIA
 
 FIELDS = [
@@ -126,6 +159,7 @@ def build_records(products):
                 prezzo_rif = fmt_price(compare)
 
             peso = ""
+            peso_kg = None
             if v.get("weight"):
                 w = float(v["weight"])
                 unit = v.get("weight_unit", "kg")
@@ -135,6 +169,7 @@ def build_records(products):
                     w = w * 0.453592
                 elif unit == "oz":
                     w = w * 0.0283495
+                peso_kg = w
                 peso = f"{w:.3f}"
 
             record = {
@@ -148,7 +183,7 @@ def build_records(products):
                 "Disponibilita": disponibilita(v.get("inventory_quantity")),
                 "Albero Categorie": albero,
                 "Link Immagine": img_main,
-                "Spese di Spedizione": fmt_price(spese_spedizione(p, v.get("price"))),
+                "Spese di Spedizione": fmt_price(spese_spedizione(p, v.get("price"), peso_kg)),
                 "Codice Produttore": v.get("sku") or "",
                 "Codice EAN": v.get("barcode") or "",
                 "Peso": peso,
