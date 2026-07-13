@@ -18,7 +18,19 @@ TOKEN = os.environ["SHOPIFY_ACCESS_TOKEN"]
 API_BASE = f"https://{STORE}/admin/api/2024-01"
 SHOP_DOMAIN = "cassefortieserrature.com"
 
-SPEDIZIONE_FORFETTARIA = "0"  # spedizione attualmente inclusa nel prezzo sul sito
+SOGLIA_SPEDIZIONE_FISSA = 100.0  # sotto questa soglia, spedizione a tariffa fissa
+SPEDIZIONE_FISSA = 9.99          # tariffa fissa sotto soglia (tutte le categorie)
+SPEDIZIONE_CASSAFORTE_OLTRE_SOGLIA = 20.0  # casseforti >= soglia: costo a peso/zona sul sito, valore di riferimento per il feed
+SPEDIZIONE_ALTRO_OLTRE_SOGLIA = 0.0        # altre categorie >= soglia: spedizione gratuita
+
+
+def spese_spedizione(product, prezzo):
+    prezzo = float(prezzo or 0)
+    if prezzo < SOGLIA_SPEDIZIONE_FISSA:
+        return SPEDIZIONE_FISSA
+    if product.get("product_type", "").strip().lower() == "cassaforte":
+        return SPEDIZIONE_CASSAFORTE_OLTRE_SOGLIA
+    return SPEDIZIONE_ALTRO_OLTRE_SOGLIA
 
 FIELDS = [
     "Nome", "Marca", "Descrizione", "Prezzo di Riferimento", "Prezzo Vendita",
@@ -136,7 +148,7 @@ def build_records(products):
                 "Disponibilita": disponibilita(v.get("inventory_quantity")),
                 "Albero Categorie": albero,
                 "Link Immagine": img_main,
-                "Spese di Spedizione": SPEDIZIONE_FORFETTARIA,
+                "Spese di Spedizione": fmt_price(spese_spedizione(p, v.get("price"))),
                 "Codice Produttore": v.get("sku") or "",
                 "Codice EAN": v.get("barcode") or "",
                 "Peso": peso,
