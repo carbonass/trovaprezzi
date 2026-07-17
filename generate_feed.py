@@ -3,8 +3,8 @@
 Genera il catalogo prodotti per Trovaprezzi.it (formato testuale con delimitatore '|').
 Specifiche: Requisiti_tecnici_Trovaprezzi.it_Network.pdf (v. 23/12/2025)
 
-Scope attuale (primo test): solo Bordogna, tipo 'cassaforte', tag contenente 'Casseforti a muro'.
-Per allargare lo scope, modifica la funzione `in_scope`.
+Scope: tutti i prodotti attivi e pubblicati sull'Online Store (tutti i vendor, tutte le
+categorie). Per restringere lo scope, modifica la funzione `in_scope`.
 """
 import os
 import re
@@ -75,18 +75,13 @@ FIELDS = [
 
 
 def in_scope(product):
-    if product.get("vendor", "").strip().lower() != "bordogna":
-        return False
-    if product.get("product_type", "").strip().lower() != "cassaforte":
-        return False
-    tags = [t.strip().lower() for t in product.get("tags", "").split(",")]
-    return any("casseforti a muro" in t for t in tags)
+    return True
 
 
 def fetch_products():
     products = []
     url = f"{API_BASE}/products.json"
-    params = {"vendor": "Bordogna", "limit": 250, "status": "active"}
+    params = {"limit": 250, "status": "active", "published_status": "published"}
     while url:
         r = requests.get(url, headers={"X-Shopify-Access-Token": TOKEN}, params=params)
         r.raise_for_status()
@@ -207,8 +202,8 @@ def write_feed(records, path):
 if __name__ == "__main__":
     out_path = sys.argv[1] if len(sys.argv) > 1 else "trovaprezzi_feed.csv"
     products = fetch_products()
-    print(f"Prodotti Bordogna totali (attivi): {len(products)}")
+    print(f"Prodotti totali (attivi e pubblicati): {len(products)}")
     records = build_records(products)
-    print(f"Record generati (in scope: casseforti a muro): {len(records)}")
+    print(f"Record generati (in scope: tutto il catalogo): {len(records)}")
     write_feed(records, out_path)
     print(f"Scritto {out_path}")

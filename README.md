@@ -4,8 +4,9 @@ Genera automaticamente ogni giorno il catalogo prodotti nel formato richiesto da
 Trovaprezzi.it (vedi `Requisiti_tecnici_Trovaprezzi.it_Network.pdf`, campi separati da `|`,
 `<endrecord>` a fine riga).
 
-**Scope attuale:** solo Bordogna, tipo "cassaforte", tag "Casseforti a muro" (primo test).
-Per allargare lo scope, modifica la funzione `in_scope()` in `generate_feed.py`.
+**Scope attuale:** tutti i prodotti attivi e pubblicati sull'Online Store (tutti i vendor,
+tutte le categorie). Per restringere lo scope, modifica la funzione `in_scope()` in
+`generate_feed.py`.
 
 ## URL del feed da comunicare a Trovaprezzi
 
@@ -41,10 +42,11 @@ git push -u origin main
 
 ## Note
 
-- Spese di spedizione: attualmente impostate a 0 (incluse nel prezzo sul sito). Quando
-  verrà attivato il calcolo per peso/dimensione/città, aggiornare `SPEDIZIONE_FORFETTARIA`
-  in `generate_feed.py` di conseguenza (Trovaprezzi richiede che il feed rispecchi
-  esattamente quanto pubblicato sul sito).
+- Spese di spedizione: calcolate in `spese_spedizione()` in `generate_feed.py`, allineate
+  alla logica live del sito — casseforti (`product_type == "cassaforte"`) a peso/zona
+  Centro Italia (nessuna soglia gratuita), tutte le altre categorie 9,99€ fisso sotto 100€
+  e gratuite da 100€ in su. Se cambia la logica di spedizione sul sito, aggiornare qui di
+  conseguenza (Trovaprezzi richiede che il feed rispecchi esattamente quanto pubblicato).
 - Il file feed viene sempre scritto con lo stesso percorso (`feed/trovaprezzi_feed.csv`):
   questo mantiene stabile l'URL richiesto dalle specifiche ("non cambiare il nome del
   catalogo e del link di scaricamento").
